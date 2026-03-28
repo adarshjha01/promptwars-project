@@ -30,7 +30,7 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files — NEVER commit secrets
 .env*
 
 # vercel
@@ -39,3 +39,15 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# test / media assets (keep repo under 1 MB)
+*.mp3
+*.wav
+*.mp4
+*.webm
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.heic
+*.heif
