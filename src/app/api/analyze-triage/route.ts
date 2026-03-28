@@ -3,8 +3,10 @@ import {
   SchemaType,
   type ResponseSchema,
 } from "@google/generative-ai";
+import { TriageResponseSchema } from "@/lib/schema";
+import { ZodError } from "zod";
 
-/* ─── Response Schema (enforces strict JSON output) ─── */
+/* ─── Response Schema (enforces strict JSON output from Gemini) ─── */
 const triageResponseSchema: ResponseSchema = {
   type: SchemaType.OBJECT,
   properties: {
@@ -133,12 +135,26 @@ export async function POST(request: Request) {
     const response = result.response;
     const text = response.text();
 
-    /* ── Parse and return the structured JSON ── */
-    const parsed = JSON.parse(text);
+    /* ── Parse JSON then validate with Zod schema ── */
+    const rawParsed = JSON.parse(text);
+    const validated = TriageResponseSchema.parse(rawParsed);
 
-    return Response.json(parsed, { status: 200 });
+    return Response.json(validated, { status: 200 });
   } catch (error: unknown) {
     console.error("[analyze-triage] Error:", error);
+
+    /* ── Zod validation failure → malformed AI response ── */
+    if (error instanceof ZodError) {
+      console.error("[analyze-triage] Zod validation errors:", error.issues);
+      return Response.json(
+        {
+          error:
+            "Malformed AI response: the model returned data that does not match the expected schema. Please try again.",
+          details: error.issues,
+        },
+        { status: 500 },
+      );
+    }
 
     const message =
       error instanceof Error ? error.message : "An unexpected error occurred.";
