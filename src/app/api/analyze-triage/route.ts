@@ -1,5 +1,9 @@
+export const runtime = 'edge';
+
 import {
   GoogleGenerativeAI,
+  HarmCategory,
+  HarmBlockThreshold,
   SchemaType,
   type ResponseSchema,
 } from "@google/generative-ai";
@@ -85,7 +89,7 @@ export async function POST(request: Request) {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return Response.json(
-        { error: "Server configuration error. API key is not set." },
+        { error: "GEMINI_API_KEY missing" },
         { status: 500 },
       );
     }
@@ -119,29 +123,48 @@ export async function POST(request: Request) {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
       model: "gemini-1.5-flash",
+      systemInstruction: SYSTEM_PROMPT,
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: triageResponseSchema,
       },
+      safetySettings: [
+        {
+          category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+          threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+        },
+        {
+          category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+          threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+        },
+        {
+          category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+          threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+        },
+        {
+          category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+          threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+        },
+      ],
     });
 
     /* ── Call Gemini with multimodal content ── */
     const result = await model.generateContent([
-      SYSTEM_PROMPT,
       imageData,
       audioData,
     ]);
 
-    const response = result.response;
-    const text = response.text();
+    /* ── Sanitize AI output (Gemini may wrap JSON in markdown fences) ── */
+    let rawText = result.response.text();
+    rawText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
 
     /* ── Parse JSON then validate with Zod schema ── */
-    const rawParsed = JSON.parse(text);
+    const rawParsed = JSON.parse(rawText);
     const validated = TriageResponseSchema.parse(rawParsed);
 
     return Response.json(validated, { status: 200 });
   } catch (error: unknown) {
-    console.error("[analyze-triage] Error:", error);
+    console.error("Triage API Error:", error);
 
     /* ── Zod validation failure → malformed AI response ── */
     if (error instanceof ZodError) {

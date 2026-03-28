@@ -29,7 +29,7 @@ describe("TriageResponseSchema", () => {
   });
 
   it("throws ZodError when risk_level is missing", () => {
-    const { risk_level: _, ...incomplete } = validTriageData;
+    const { risk_level: _risk_level, ...incomplete } = validTriageData;
 
     expect(() => TriageResponseSchema.parse(incomplete)).toThrow(ZodError);
   });
@@ -47,7 +47,7 @@ describe("TriageResponseSchema", () => {
   });
 
   it("throws ZodError when a required field is missing entirely", () => {
-    const { action_plan: _, ...incomplete } = validTriageData;
+    const { action_plan: _action_plan, ...incomplete } = validTriageData;
 
     expect(() => TriageResponseSchema.parse(incomplete)).toThrow(ZodError);
   });

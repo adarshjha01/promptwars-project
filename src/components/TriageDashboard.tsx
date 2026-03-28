@@ -8,11 +8,27 @@ import React, {
   type ChangeEvent,
   type DragEvent,
 } from "react";
+import dynamic from "next/dynamic";
 import type { User } from "firebase/auth";
 import { saveTriageResult } from "@/lib/firestore.service";
 import type { TriageResult } from "@/lib/schema";
 import TriageInputForm from "@/components/TriageInputForm";
-import TriageResultCard from "@/components/TriageResultCard";
+
+const TriageResultCard = dynamic(
+  () => import("@/components/TriageResultCard"),
+  {
+    ssr: false,
+    loading: () => (
+      <section className="lg:col-span-7 glass-card p-6 animate-pulse">
+        <div className="flex flex-col items-center justify-center h-full min-h-[400px] gap-4">
+          <div className="h-16 w-16 rounded-2xl bg-surface-elevated" />
+          <div className="h-4 w-48 rounded bg-surface-elevated" />
+          <div className="h-3 w-64 rounded bg-surface-elevated" />
+        </div>
+      </section>
+    ),
+  },
+);
 
 /* ──────────────────── Main Dashboard ──────────────────── */
 
