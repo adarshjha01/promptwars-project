@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "MedScan AI — Drug Interaction Dashboard",
+  title: "MedBridge — AI Drug Interaction Triage",
   description:
-    "Upload prescriptions and record patient symptoms to detect dangerous drug interactions with AI-powered analysis.",
+    "Upload prescriptions and record patient symptoms to detect dangerous drug interactions with AI-powered triage analysis.",
 };
 
 export default function RootLayout({

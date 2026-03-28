@@ -201,3 +201,46 @@ body {
 .json-bracket {
   color: var(--muted);
 }
+
+/* ─── Waveform Animation (hydration-safe, no JS randomness) ─── */
+@keyframes waveform-bar {
+  0%, 100% { height: 15%; }
+  25%      { height: 70%; }
+  50%      { height: 40%; }
+  75%      { height: 90%; }
+}
+
+@keyframes waveform-bar-alt {
+  0%, 100% { height: 20%; }
+  30%      { height: 85%; }
+  60%      { height: 30%; }
+  80%      { height: 60%; }
+}
+
+.waveform-bar-recording {
+  animation: waveform-bar 0.8s ease-in-out infinite;
+}
+
+.waveform-bar-recording-alt {
+  animation: waveform-bar-alt 0.9s ease-in-out infinite;
+}
+
+/* ─── Additional Badges ─── */
+.badge-critical {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+/* ─── Loading Spinner ─── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
