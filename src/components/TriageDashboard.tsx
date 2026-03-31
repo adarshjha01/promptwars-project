@@ -1,5 +1,6 @@
 "use client";
 
+
 import React, { useState, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
 import type { User } from "firebase/auth";
@@ -9,7 +10,7 @@ import TriageHistory from "@/components/TriageHistory";
 import { useFileHandler } from "@/hooks/useFileHandler";
 import { useAudioRecorder } from "@/hooks/useAudioRecorder";
 import { FilePlus, History } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, Variants } from "framer-motion";
 
 const TriageResultCard = dynamic(
   () => import("@/components/TriageResultCard"),
@@ -110,7 +111,7 @@ export default function TriageDashboard({ user }: TriageDashboardProps) {
   const canSubmit = !!imageFile && !isLoading && !isRecording;
 
   // Animation variants for the tab content
-  const tabVariants = {
+  const tabVariants: Variants = {
     hidden: { opacity: 0, y: 10, scale: 0.98 },
     enter: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.3, ease: "easeOut" } },
     exit: { opacity: 0, y: -10, scale: 0.98, transition: { duration: 0.2, ease: "easeIn" } },
