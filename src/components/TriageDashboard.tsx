@@ -1,18 +1,15 @@
 "use client";
 
-import React, {
-  useState,
-  useCallback,
-  useRef,
-  useEffect,
-  type ChangeEvent,
-  type DragEvent,
-} from "react";
+import React, { useState, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
 import type { User } from "firebase/auth";
-import { saveTriageResult } from "@/lib/firestore.service";
 import type { TriageResult } from "@/lib/schema";
 import TriageInputForm from "@/components/TriageInputForm";
+import TriageHistory from "@/components/TriageHistory";
+import { useFileHandler } from "@/hooks/useFileHandler";
+import { useAudioRecorder } from "@/hooks/useAudioRecorder";
+import { FilePlus, History } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 const TriageResultCard = dynamic(
   () => import("@/components/TriageResultCard"),
@@ -27,259 +24,190 @@ const TriageResultCard = dynamic(
         </div>
       </section>
     ),
-  },
+  }
 );
-
-/* ──────────────────── Main Dashboard ──────────────────── */
 
 interface TriageDashboardProps {
   user: User;
 }
 
 export default function TriageDashboard({ user }: TriageDashboardProps) {
-  /* ── State ── */
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
+  const {
+    imageFile, imagePreview, dragActive, fileError,
+    onDrag, onDrop, onFileChange, clearImage,
+  } = useFileHandler();
+
+  const {
+    audioBlob, isRecording, recordingTime, audioError,
+    toggleRecording, clearAudio,
+  } = useAudioRecorder();
+
+  const [activeTab, setActiveTab] = useState<"new" | "history">("new");
+  const [symptomsText, setSymptomsText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [apiError, setApiError] = useState<string | null>(null);
   const [triageResult, setTriageResult] = useState<TriageResult | null>(null);
-  const [dragActive, setDragActive] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
-  /* ── Refs ── */
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-
-  /* ── Cleanup on unmount ── */
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-      if (imagePreview) URL.revokeObjectURL(imagePreview);
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((t) => t.stop());
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  /* ───── Image Handling ───── */
-
-  const setImage = useCallback(
-    (file: File) => {
-      if (!file.type.startsWith("image/")) return;
-      if (imagePreview) URL.revokeObjectURL(imagePreview);
-      const url = URL.createObjectURL(file);
-      setImageFile(file);
-      setImagePreview(url);
-      setError(null);
-    },
-    [imagePreview],
-  );
-
-  const clearImage = useCallback(() => {
-    if (imagePreview) URL.revokeObjectURL(imagePreview);
-    setImageFile(null);
-    setImagePreview(null);
-  }, [imagePreview]);
-
-  const handleDrag = useCallback((e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") setDragActive(true);
-    if (e.type === "dragleave") setDragActive(false);
-  }, []);
-
-  const handleDrop = useCallback(
-    (e: DragEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setDragActive(false);
-      const file = e.dataTransfer.files?.[0];
-      if (file) setImage(file);
-    },
-    [setImage],
-  );
-
-  const handleFileChange = useCallback(
-    (e: ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) setImage(file);
-    },
-    [setImage],
-  );
-
-  /* ───── Audio Recording ───── */
-
-  const startRecording = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      audioChunksRef.current = [];
-
-      const recorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = recorder;
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-
-      recorder.onstop = () => {
-        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        setAudioBlob(blob);
-        stream.getTracks().forEach((t) => t.stop());
-        streamRef.current = null;
-      };
-
-      recorder.start();
-      setIsRecording(true);
-      setRecordingTime(0);
-      setError(null);
-      timerRef.current = setInterval(() => {
-        setRecordingTime((t) => t + 1);
-      }, 1000);
-    } catch {
-      setError(
-        "Microphone access denied. Please allow microphone permissions and try again.",
-      );
-    }
-  }, []);
-
-  const stopRecording = useCallback(() => {
-    if (
-      mediaRecorderRef.current &&
-      mediaRecorderRef.current.state !== "inactive"
-    ) {
-      mediaRecorderRef.current.stop();
-    }
-    setIsRecording(false);
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-  }, []);
-
-  const toggleRecording = useCallback(() => {
-    if (isRecording) {
-      stopRecording();
-    } else {
-      startRecording();
-    }
-  }, [isRecording, startRecording, stopRecording]);
-
-  /* ───── API Integration ───── */
+  const displayError = fileError || audioError || apiError;
 
   const analyzeData = useCallback(async () => {
-    if (!imageFile) {
-      setError("Please upload a prescription image before processing.");
-      return;
-    }
-    if (!audioBlob) {
-      setError("Please record patient symptoms before processing.");
-      return;
-    }
+    if (!imageFile) return;
 
     setIsLoading(true);
-    setError(null);
+    setApiError(null);
     setTriageResult(null);
-    setSaveStatus("idle");
+    setSaveStatus("saving");
 
     try {
       const formData = new FormData();
       formData.append("image", imageFile);
-      formData.append("audio", audioBlob, "recording.webm");
+      
+      if (audioBlob) {
+        formData.append("audio", audioBlob, `recording.${audioBlob.type.split('/')[1] || 'webm'}`);
+      }
+      if (symptomsText.trim()) {
+        formData.append("symptoms_text", symptomsText.trim());
+      }
+
+      const idToken = await user.getIdToken();
 
       const res = await fetch("/api/analyze-triage", {
         method: "POST",
+        headers: { "Authorization": `Bearer ${idToken}` },
         body: formData,
       });
 
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        throw new Error(
-          body?.error ?? `Server error (${res.status}). Please try again.`,
-        );
+        throw new Error(body?.error ?? `Server error (${res.status}).`);
       }
 
       const data: TriageResult = await res.json();
       setTriageResult(data);
+      setSaveStatus("saved");
 
-      /* Auto-save to Firestore */
-      setSaveStatus("saving");
-      try {
-        await saveTriageResult(user.uid, data);
-        setSaveStatus("saved");
-      } catch {
-        setSaveStatus("error");
-      }
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : "An unexpected error occurred.";
-      setError(msg);
+      const msg = err instanceof Error ? err.message : "An unexpected error occurred.";
+      setApiError(msg);
+      setSaveStatus("error");
     } finally {
       setIsLoading(false);
     }
-  }, [imageFile, audioBlob, user.uid]);
-
-  /* ───── Reset ───── */
+  }, [imageFile, audioBlob, symptomsText, user]);
 
   const resetAll = useCallback(() => {
-    if (imagePreview) URL.revokeObjectURL(imagePreview);
-    setImageFile(null);
-    setImagePreview(null);
-    setAudioBlob(null);
-    setIsRecording(false);
-    setRecordingTime(0);
+    clearImage();
+    clearAudio();
+    setSymptomsText("");
     setIsLoading(false);
-    setError(null);
+    setApiError(null);
     setTriageResult(null);
     setSaveStatus("idle");
-  }, [imagePreview]);
+  }, [clearImage, clearAudio]);
 
-  /* ───── Derived ───── */
+  const canSubmit = !!imageFile && !isLoading && !isRecording;
 
-  const canSubmit = !!imageFile && !!audioBlob && !isLoading && !isRecording;
-
-  /* ───────────────────── Render ───────────────────── */
+  // Animation variants for the tab content
+  const tabVariants = {
+    hidden: { opacity: 0, y: 10, scale: 0.98 },
+    enter: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.3, ease: "easeOut" } },
+    exit: { opacity: 0, y: -10, scale: 0.98, transition: { duration: 0.2, ease: "easeIn" } },
+  };
 
   return (
-    <main
-      className="flex-1 p-4 sm:p-6 lg:p-8"
-      role="main"
-      aria-label="Dashboard content"
-    >
-      <div className="mx-auto max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-5">
-        <TriageInputForm
-          imagePreview={imagePreview}
-          imageFile={imageFile}
-          hasAudio={!!audioBlob}
-          isRecording={isRecording}
-          recordingTime={recordingTime}
-          isLoading={isLoading}
-          canSubmit={canSubmit}
-          dragActive={dragActive}
-          error={error}
-          onDrag={handleDrag}
-          onDrop={handleDrop}
-          onFileChange={handleFileChange}
-          onClearImage={clearImage}
-          onToggleRecording={toggleRecording}
-          onAnalyze={analyzeData}
-          fileInputRef={fileInputRef}
-        />
+    <main className="flex-1 p-4 sm:p-6 lg:p-8" role="main">
+      <div className="mx-auto max-w-7xl">
+        
+        {/* ─── ANIMATED TAB NAVIGATION ─── */}
+        <div className="flex gap-4 mb-8 border-b border-border-custom relative">
+          <button
+            onClick={() => setActiveTab("new")}
+            className={`relative flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${
+              activeTab === "new" ? "text-foreground" : "text-muted hover:text-foreground"
+            }`}
+          >
+            <FilePlus size={18} /> New Triage
+            {activeTab === "new" && (
+              <motion.div
+                layoutId="activeTabIndicator"
+                className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent"
+                transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              />
+            )}
+          </button>
+          
+          <button
+            onClick={() => setActiveTab("history")}
+            className={`relative flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${
+              activeTab === "history" ? "text-foreground" : "text-muted hover:text-foreground"
+            }`}
+          >
+            <History size={18} /> Patient History
+            {activeTab === "history" && (
+              <motion.div
+                layoutId="activeTabIndicator"
+                className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent"
+                transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              />
+            )}
+          </button>
+        </div>
 
-        <TriageResultCard
-          result={triageResult}
-          saveStatus={saveStatus}
-          hasImage={!!imageFile}
-          hasAudio={!!audioBlob}
-          onReset={resetAll}
-        />
+        {/* ─── TAB CONTENT WITH CROSSFADE ─── */}
+        <AnimatePresence mode="wait">
+          {activeTab === "new" ? (
+            <motion.div
+              key="new-tab"
+              variants={tabVariants}
+              initial="hidden"
+              animate="enter"
+              exit="exit"
+              className="grid grid-cols-1 lg:grid-cols-12 gap-5"
+            >
+              <TriageInputForm
+                symptomsText={symptomsText}
+                onSymptomsTextChange={setSymptomsText}
+                imagePreview={imagePreview}
+                imageFile={imageFile}
+                hasAudio={!!audioBlob}
+                isRecording={isRecording}
+                recordingTime={recordingTime}
+                isLoading={isLoading}
+                canSubmit={canSubmit}
+                dragActive={dragActive}
+                error={displayError}
+                onDrag={onDrag}
+                onDrop={onDrop}
+                onFileChange={onFileChange}
+                onClearImage={clearImage}
+                onToggleRecording={toggleRecording}
+                onAnalyze={analyzeData}
+                fileInputRef={fileInputRef}
+              />
+
+              <TriageResultCard
+                result={triageResult}
+                saveStatus={saveStatus}
+                hasImage={!!imageFile}
+                hasAudio={!!audioBlob || !!symptomsText.trim()}
+                onReset={resetAll}
+              />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="history-tab"
+              variants={tabVariants}
+              initial="hidden"
+              animate="enter"
+              exit="exit"
+            >
+              <TriageHistory user={user} />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
       </div>
     </main>
   );

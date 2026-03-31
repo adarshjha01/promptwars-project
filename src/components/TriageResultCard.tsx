@@ -1,143 +1,26 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
+import type { TriageResult } from "@/lib/schema";
 import {
-  ImageIcon,
-  Mic,
-  AlertTriangle,
   Activity,
   Pill,
+  AlertTriangle,
   CheckCircle,
-  FileJson,
-  ChevronRight,
-  RotateCcw,
+  FileCode2,
+  RefreshCcw,
+  ShieldAlert,
+  ShieldCheck,
+  Shield
 } from "lucide-react";
-import type { TriageResult } from "@/lib/schema";
 
-/* ──────────────────── Sub-components ──────────────────── */
-
-type LucideIcon = React.ComponentType<
-  React.SVGProps<SVGSVGElement> & { size?: number | string }
->;
-
-function SectionHeader({
-  icon: Icon,
-  title,
-  subtitle,
-}: {
-  icon: LucideIcon;
-  title: string;
-  subtitle: string;
-}) {
-  return (
-    <div className="flex items-start gap-3 mb-5">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-muted text-accent">
-        <Icon size={20} />
-      </div>
-      <div>
-        <h2 className="text-lg font-semibold text-foreground">{title}</h2>
-        <p className="text-sm text-muted">{subtitle}</p>
-      </div>
-    </div>
-  );
-}
-
-function ResultBlock({
-  icon: Icon,
-  title,
-  ariaLabel,
-  children,
-}: {
-  icon: LucideIcon;
-  title: string;
-  ariaLabel: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div
-      className="rounded-xl bg-surface/60 border border-border-custom p-4"
-      role="region"
-      aria-label={ariaLabel}
-    >
-      <div className="flex items-center gap-2 mb-3">
-        <Icon size={16} className="text-accent" />
-        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function RiskBadge({ level }: { level: TriageResult["risk_level"] }) {
-  const config: Record<string, { cls: string; label: string }> = {
-    Critical: { cls: "badge-critical", label: "Critical" },
-    High: { cls: "badge-danger", label: "High Risk" },
-    Medium: { cls: "badge-warning", label: "Medium Risk" },
-    Low: { cls: "badge-success", label: "Low Risk" },
-  };
-  const c = config[level] ?? config.Low;
-  return (
-    <span
-      className={`badge ${c.cls}`}
-      role="status"
-      aria-label={`Risk level: ${c.label}`}
-    >
-      <AlertTriangle size={12} />
-      {c.label}
-    </span>
-  );
-}
-
-function RawJsonPanel({ data }: { data: TriageResult }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="rounded-xl bg-surface/60 border border-border-custom overflow-hidden">
-      <button
-        id="json-toggle"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        aria-controls="json-content"
-        aria-label="Toggle raw JSON output"
-        className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-foreground hover:bg-surface-elevated/50 transition-colors"
-      >
-        <div className="flex items-center gap-2">
-          <FileJson size={16} className="text-accent" />
-          <span>Raw JSON Output</span>
-        </div>
-        <ChevronRight
-          size={16}
-          className={`text-muted transition-transform duration-200 ${
-            open ? "rotate-90" : ""
-          }`}
-        />
-      </button>
-      {open && (
-        <div id="json-content" role="region" aria-label="Raw JSON output">
-          <pre className="overflow-x-auto p-4 border-t border-border-custom text-xs font-mono leading-relaxed text-foreground/80">
-            {JSON.stringify(data, null, 2)}
-          </pre>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ──────────────────── Props ──────────────────── */
-
-export interface TriageResultCardProps {
-  /** Validated triage result data (null = empty / waiting state) */
+interface TriageResultCardProps {
   result: TriageResult | null;
-  /** Current Firestore save status */
   saveStatus: "idle" | "saving" | "saved" | "error";
-  /** Whether the image file has been uploaded (for readiness indicator) */
   hasImage: boolean;
-  /** Whether the audio blob has been captured (for readiness indicator) */
   hasAudio: boolean;
-  /** Reset handler to start a new triage session */
   onReset: () => void;
 }
-
-/* ──────────────────── Component ──────────────────── */
 
 export default function TriageResultCard({
   result,
@@ -146,186 +29,116 @@ export default function TriageResultCard({
   hasAudio,
   onReset,
 }: TriageResultCardProps) {
+  if (!result) {
+    return (
+      <section className="lg:col-span-7 flex flex-col items-center justify-center p-12 text-center glass-card border border-border-custom bg-surface-elevated/30">
+        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-surface-elevated text-muted shadow-inner">
+          <FileCode2 size={28} />
+        </div>
+        <h3 className="text-xl font-semibold text-foreground">Analysis Results</h3>
+        <p className="mt-2 text-sm text-muted max-w-sm">
+          Upload a prescription image and record patient symptoms, then press <strong>Process Triage</strong> to generate an AI-powered analysis.
+        </p>
+        <div className="mt-6 flex gap-3">
+          <span className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${hasImage ? "bg-success-muted text-success" : "bg-surface-elevated text-muted"}`}>
+            <CheckCircle size={14} /> Image ready
+          </span>
+          <span className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${hasAudio ? "bg-success-muted text-success" : "bg-surface-elevated text-muted"}`}>
+            <CheckCircle size={14} /> Symptoms ready
+          </span>
+        </div>
+      </section>
+    );
+  }
+
+  // Determine Risk Badge Color
+  const getRiskBadge = (level: string) => {
+    switch (level.toLowerCase()) {
+      case "low": return <span className="flex items-center gap-1.5 rounded-full bg-success-muted px-3 py-1 text-xs font-bold text-success border border-success/20"><ShieldCheck size={14} /> LOW RISK</span>;
+      case "medium": return <span className="flex items-center gap-1.5 rounded-full bg-warning-muted px-3 py-1 text-xs font-bold text-warning border border-warning/20"><Shield size={14} /> MEDIUM RISK</span>;
+      case "high": return <span className="flex items-center gap-1.5 rounded-full bg-[#ff7b72]/10 px-3 py-1 text-xs font-bold text-[#ff7b72] border border-[#ff7b72]/20"><ShieldAlert size={14} /> HIGH RISK</span>;
+      case "critical": return <span className="flex items-center gap-1.5 rounded-full bg-danger-muted px-3 py-1 text-xs font-bold text-danger border border-danger/20 animate-pulse"><AlertTriangle size={14} /> CRITICAL RISK</span>;
+      default: return <span className="flex items-center gap-1.5 rounded-full bg-surface-elevated px-3 py-1 text-xs font-bold text-foreground"><Shield size={14} /> UNKNOWN RISK</span>;
+    }
+  };
+
   return (
-    <section
-      className="lg:col-span-7 glass-card p-6 animate-fade-in-up-delay-2"
-      aria-labelledby="results-heading"
-    >
-      {result ? (
-        <>
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <SectionHeader
-              icon={FileJson}
-              title="Analysis Results"
-              subtitle="AI-generated structured report"
-            />
-            <div className="flex items-center gap-2">
-              <RiskBadge level={result.risk_level} />
-              {saveStatus === "saved" && (
-                <span className="badge badge-success text-[10px]">
-                  <CheckCircle size={10} />
-                  Saved
-                </span>
-              )}
-              {saveStatus === "saving" && (
-                <span className="badge badge-warning text-[10px]">
-                  Saving…
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Result Sections */}
-          <div className="space-y-6">
-            {/* Symptoms */}
-            <ResultBlock
-              icon={Activity}
-              title="Patient Symptoms"
-              ariaLabel="Patient symptoms list"
-            >
-              <ul className="space-y-2" role="list">
-                {result.symptoms.map((s, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm">
-                    <ChevronRight
-                      size={14}
-                      className="mt-0.5 shrink-0 text-accent"
-                    />
-                    <span className="text-foreground/90">{s}</span>
-                  </li>
-                ))}
-              </ul>
-            </ResultBlock>
-
-            {/* Identified Medications */}
-            <ResultBlock
-              icon={Pill}
-              title="Identified Medications"
-              ariaLabel="Identified medications list"
-            >
-              <ul className="space-y-2" role="list">
-                {result.identified_medications.map((med, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm">
-                    <Pill
-                      size={14}
-                      className="mt-0.5 shrink-0 text-accent"
-                    />
-                    <span className="text-foreground/90">{med}</span>
-                  </li>
-                ))}
-              </ul>
-            </ResultBlock>
-
-            {/* Interaction Risk / Warning Callout */}
-            <ResultBlock
-              icon={AlertTriangle}
-              title="Potential Interactions"
-              ariaLabel="Potential drug interactions"
-            >
-              <div className="rounded-xl bg-warning-muted/40 border border-warning/20 p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <AlertTriangle
-                    size={16}
-                    className="text-warning shrink-0"
-                  />
-                  <span className="text-sm font-semibold text-warning">
-                    Interaction Warning
-                  </span>
-                </div>
-                <p className="text-sm text-foreground/80 leading-relaxed">
-                  {result.potential_interactions}
-                </p>
-              </div>
-            </ResultBlock>
-
-            {/* Action Plan */}
-            <ResultBlock
-              icon={CheckCircle}
-              title="Action Plan"
-              ariaLabel="Recommended action plan"
-            >
-              <ol className="space-y-2 list-none" role="list">
-                {result.action_plan.map((step, i) => (
-                  <li key={i} className="flex items-start gap-3 text-sm">
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent-muted text-accent text-xs font-bold">
-                      {i + 1}
-                    </span>
-                    <span className="text-foreground/90 pt-0.5">
-                      {step}
-                    </span>
-                  </li>
-                ))}
-              </ol>
-            </ResultBlock>
-
-            {/* Raw JSON */}
-            <RawJsonPanel data={result} />
-          </div>
-
-          {/* Reset Button */}
-          <button
-            id="new-triage-btn"
-            onClick={onReset}
-            aria-label="Start a new triage session"
-            className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl border border-border-custom px-5 py-3 text-sm font-medium text-muted hover:text-foreground hover:border-foreground/20 transition-colors"
-          >
-            <RotateCcw size={16} />
-            Start New Triage
-          </button>
-        </>
-      ) : (
-        /* ── Empty / Waiting State ── */
-        <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-center gap-4">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-surface-elevated text-muted">
-            <FileJson size={28} />
+    <section className="lg:col-span-7 flex flex-col gap-5 animate-fade-in-up">
+      {/* Header Info */}
+      <div className="glass-card p-5 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-muted text-accent">
+            <FileCode2 size={20} />
           </div>
           <div>
-            <h2
-              id="results-heading"
-              className="text-lg font-semibold text-foreground mb-1"
-            >
-              Analysis Results
-            </h2>
-            <p className="text-sm text-muted max-w-sm">
-              Upload a prescription image and record patient symptoms,
-              then press <strong>Process Triage</strong> to generate an
-              AI-powered analysis.
-            </p>
-          </div>
-
-          {/* Readiness Indicators */}
-          <div className="flex flex-col sm:flex-row gap-3 mt-4">
-            <div
-              className={`flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-full ${
-                hasImage
-                  ? "bg-success-muted text-success"
-                  : "bg-surface-elevated text-muted"
-              }`}
-            >
-              {hasImage ? (
-                <CheckCircle size={12} />
-              ) : (
-                <ImageIcon size={12} />
-              )}
-              {hasImage ? "Image ready" : "Awaiting image"}
-            </div>
-            <div
-              className={`flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-full ${
-                hasAudio
-                  ? "bg-success-muted text-success"
-                  : "bg-surface-elevated text-muted"
-              }`}
-            >
-              {hasAudio ? (
-                <CheckCircle size={12} />
-              ) : (
-                <Mic size={12} />
-              )}
-              {hasAudio ? "Audio ready" : "Awaiting recording"}
-            </div>
+            <h2 className="text-lg font-semibold text-foreground">Analysis Results</h2>
+            <p className="text-xs text-muted">AI-generated structured report</p>
           </div>
         </div>
-      )}
+        <div className="flex items-center gap-3">
+          {getRiskBadge(result.risk_level)}
+          {saveStatus === "saved" && (
+            <span className="flex items-center gap-1 rounded-full bg-success/20 px-2.5 py-1 text-xs font-medium text-success">
+              <CheckCircle size={12} /> Saved
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Symptoms */}
+      <div className="glass-card p-6">
+        <h3 className="mb-4 flex items-center gap-2 font-semibold text-foreground"><Activity size={18} className="text-accent" /> Patient Symptoms</h3>
+        <ul className="space-y-2">
+          {result.symptoms.map((sym, i) => (
+            <li key={i} className="flex items-start gap-2 text-sm text-muted">
+              <span className="mt-1 text-accent">›</span> {sym}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Medications */}
+      <div className="glass-card p-6">
+        <h3 className="mb-4 flex items-center gap-2 font-semibold text-foreground"><Pill size={18} className="text-accent" /> Identified Medications</h3>
+        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {result.identified_medications.map((med, i) => (
+            <li key={i} className="flex items-center gap-2 rounded-lg border border-border-custom bg-surface p-3 text-sm text-foreground shadow-sm">
+              <Pill size={16} className="text-muted shrink-0" /> 
+              <span className="truncate">{med}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Interactions */}
+      <div className="glass-card p-6">
+        <h3 className="mb-4 flex items-center gap-2 font-semibold text-foreground"><AlertTriangle size={18} className="text-warning" /> Potential Interactions</h3>
+        <div className="rounded-xl border border-warning/20 bg-warning-muted/30 p-4">
+          <p className="text-sm leading-relaxed text-foreground/90">{result.potential_interactions}</p>
+        </div>
+      </div>
+
+      {/* Action Plan */}
+      <div className="glass-card p-6">
+        <h3 className="mb-4 flex items-center gap-2 font-semibold text-foreground"><CheckCircle size={18} className="text-success" /> Action Plan</h3>
+        <div className="space-y-3">
+          {result.action_plan.map((step, i) => (
+            <div key={i} className="flex items-start gap-3 rounded-lg border border-border-custom bg-surface p-4 shadow-sm">
+              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent-muted text-xs font-bold text-accent">
+                {i + 1}
+              </div>
+              <p className="text-sm text-foreground/90 mt-0.5">{step}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <button
+        onClick={onReset}
+        className="glass-card mt-2 flex w-full items-center justify-center gap-2 p-4 text-sm font-medium text-muted transition-colors hover:bg-surface-elevated hover:text-foreground"
+      >
+        <RefreshCcw size={16} /> Start New Triage
+      </button>
     </section>
   );
 }

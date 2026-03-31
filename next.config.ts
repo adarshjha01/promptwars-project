@@ -1,11 +1,8 @@
+import type { NextConfig } from "next";
 
-
-const nextConfig = {
-  experimental: {
-    turbo: {
-      root: '.',
-    },
-  },
+const nextConfig: NextConfig = {
+  // Remove the experimental { turbo: ... } block if it exists
+  reactStrictMode: true,
 };
 
 export default nextConfig;
